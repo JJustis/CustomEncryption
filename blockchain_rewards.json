@@ -1,0 +1,30 @@
+{
+    "blocks": [
+        {
+            "index": 0,
+            "timestamp": 1740792961,
+            "data": {
+                "message": "Genesis Block",
+                "transactions": [],
+                "difficulty": 4,
+                "totalSupply": 1000
+            },
+            "previousHash": "0",
+            "hash": "576cd36a28853832c31cd5404736cab66d11c2bf6b1f70d6d13b69308b06239b",
+            "nonce": 0
+        }
+    ],
+    "pendingTransactions": [],
+    "wallet": {
+        "balance": 1000,
+        "address": "master_wallet_d5a65c72d484dfef",
+        "created": 1740792961
+    },
+    "statistics": {
+        "totalTransactions": 0,
+        "totalRewardsDistributed": 0,
+        "totalMessages": 0,
+        "averageHashRate": 0
+    },
+    "miners": []
+}
