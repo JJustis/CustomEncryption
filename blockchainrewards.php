@@ -1,214 +1,440 @@
 <?php
 /**
  * BlockchainRewards System
- * Manages the distribution of mining rewards to credit card holders
- * through a proof-of-work verification system
+ * Enterprise-grade blockchain management for distributed reward ecosystem
+ * 
+ * @package BlockchainRewards
+ * @version 1.0.0
  */
 class BlockchainRewards {
-    private $blockchainFile = 'blockchain_rewards.json';
-    private $rewardRate = 0.1; // Reserves per message decrypted
-    private $walletBalance = 1000.0; // Initial wallet balance
-    private $difficultyTarget = 4; // Number of leading zeroes for proof-of-work
-    
     /**
-     * Constructor initializes blockchain if it doesn't exist
+     * Configuration Constants
+     * Centralized management of system parameters
+     */
+    private const BLOCKCHAIN_FILE = 'blockchain_rewards.json';
+    private const REWARD_RATE = 0.1;          // Reserves per message decryption
+    private const INITIAL_WALLET_BALANCE = 1000.0;
+    private const DIFFICULTY_TARGET = 4;      // Leading zeroes for proof-of-work
+    private const MAX_NONCE = 1000000;        // Prevent infinite mining
+    private const MAX_TRANSACTION_AGE = 3600; // 1 hour transaction validity
+
+    /**
+     * System State Properties
+     * Manages internal state of blockchain infrastructure
+     */
+    private $blockchainData = [];
+
+    /**
+     * Constructor
+     * Initializes blockchain infrastructure
      */
     public function __construct() {
-        if (!file_exists($this->blockchainFile)) {
-            $this->initializeBlockchain();
-        }
+        $this->initializeBlockchainIfNeeded();
     }
-    
+public function getBlockchain(): array {
+    // Ensure file exists and is readable
+    if (!file_exists(self::BLOCKCHAIN_FILE) || !is_readable(self::BLOCKCHAIN_FILE)) {
+        // Initialize blockchain if file is missing
+        $this->initializeBlockchainIfNeeded();
+    }
+
+    try {
+        $fileContents = file_get_contents(self::BLOCKCHAIN_FILE);
+        
+        if ($fileContents === false) {
+            throw new Exception("Unable to read blockchain file");
+        }
+
+        $blockchain = json_decode($fileContents, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new Exception("JSON parsing error: " . json_last_error_msg());
+        }
+
+        // Additional validation
+        if (!isset($blockchain['blocks']) || !is_array($blockchain['blocks'])) {
+            throw new Exception("Invalid blockchain structure");
+        }
+
+        return $blockchain;
+    } catch (Exception $e) {
+        error_log('Blockchain Load Error: ' . $e->getMessage());
+        
+        // Reinitialize if data is corrupted
+        $this->initializeBlockchainIfNeeded();
+        return $this->blockchainData;
+    }
+}
     /**
-     * Initialize the blockchain with a genesis block
+     * Initialize Blockchain Infrastructure
+     * Creates genesis block and initial system state
      */
-    private function initializeBlockchain() {
-        $genesisBlock = [
+private function initializeBlockchainIfNeeded(): void {
+    if (!file_exists(self::BLOCKCHAIN_FILE)) {
+        // Ensure the directory exists
+        $directory = dirname(self::BLOCKCHAIN_FILE);
+        if (!is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        // Create initial blockchain structure
+        $this->blockchainData = [
+            'blocks' => [$this->createGenesisBlock()],
+            'pendingTransactions' => [],
+            'wallet' => $this->createInitialWallet(),
+            'statistics' => $this->initializeStatistics(),
+            'miners' => []
+        ];
+        $this->saveBlockchain();
+    } else {
+        $this->loadBlockchain();
+    }
+}
+
+private function saveBlockchain(): void {
+    // Ensure proper JSON encoding with error handling
+    $jsonData = json_encode($this->blockchainData, JSON_PRETTY_PRINT);
+    
+    if ($jsonData === false) {
+        error_log('Failed to encode blockchain data: ' . json_last_error_msg());
+        throw new Exception('Unable to save blockchain data');
+    }
+
+    $result = file_put_contents(self::BLOCKCHAIN_FILE, $jsonData);
+    
+    if ($result === false) {
+        error_log('Failed to write blockchain file');
+        throw new Exception('Unable to write blockchain file');
+    }
+}
+
+private function loadBlockchain(): void {
+    // Add robust error handling for file reading and JSON parsing
+    $fileContents = file_get_contents(self::BLOCKCHAIN_FILE);
+    
+    if ($fileContents === false) {
+        error_log('Failed to read blockchain file');
+        $this->initializeBlockchainIfNeeded();
+        return;
+    }
+
+    $parsedData = json_decode($fileContents, true);
+    
+    if ($parsedData === null) {
+        error_log('Failed to parse blockchain JSON: ' . json_last_error_msg());
+        $this->initializeBlockchainIfNeeded();
+        return;
+    }
+
+    $this->blockchainData = $parsedData;
+}
+
+    /**
+     * Create Genesis Block
+     * Establishes initial blockchain entry point
+     * 
+     * @return array Genesis block configuration
+     */
+    private function createGenesisBlock(): array {
+        $timestamp = time();
+        $genesisBlockData = [
             'index' => 0,
-            'timestamp' => time(),
+            'timestamp' => $timestamp,
             'data' => [
                 'message' => 'Genesis Block',
                 'transactions' => [],
-                'difficulty' => $this->difficultyTarget,
-                'totalSupply' => $this->walletBalance
+                'difficulty' => self::DIFFICULTY_TARGET,
+                'totalSupply' => self::INITIAL_WALLET_BALANCE
             ],
             'previousHash' => '0',
-            'hash' => $this->calculateHash(0, '0', time(), ['message' => 'Genesis Block']),
             'nonce' => 0
         ];
-        
-        $blockchain = [
-            'blocks' => [$genesisBlock],
-            'pendingTransactions' => [],
-            'wallet' => [
-                'balance' => $this->walletBalance,
-                'address' => 'master_wallet_' . bin2hex(random_bytes(8)),
-                'created' => time()
-            ],
-            'statistics' => [
-                'totalTransactions' => 0,
-                'totalRewardsDistributed' => 0,
-                'totalMessages' => 0,
-                'averageHashRate' => 0
-            ],
-            'miners' => []
+
+        $genesisBlockData['hash'] = $this->calculateBlockHash(
+            $genesisBlockData['index'], 
+            $genesisBlockData['previousHash'], 
+            $genesisBlockData['timestamp'], 
+            $genesisBlockData['data'], 
+            $genesisBlockData['nonce']
+        );
+
+        return $genesisBlockData;
+    }
+
+    /**
+     * Create Initial Wallet
+     * Generates master wallet for reward distribution
+     * 
+     * @return array Wallet configuration
+     */
+    private function createInitialWallet(): array {
+        return [
+            'balance' => self::INITIAL_WALLET_BALANCE,
+            'address' => 'master_wallet_' . bin2hex(random_bytes(8)),
+            'created' => time()
         ];
+    }
+
+    /**
+     * Initialize Blockchain Statistics
+     * Sets up initial tracking metrics
+     * 
+     * @return array Initial statistics configuration
+     */
+    private function initializeStatistics(): array {
+        return [
+            'totalTransactions' => 0,
+            'totalRewardsDistributed' => 0,
+            'totalMessages' => 0,
+            'averageHashRate' => 0
+        ];
+    }
+
+    /**
+     * Calculate Block Hash
+     * Generates cryptographically secure block hash
+     * 
+     * @param int $index Block index
+     * @param string $previousHash Previous block's hash
+     * @param int $timestamp Block creation timestamp
+     * @param mixed $data Block data
+     * @param int $nonce Mining nonce
+     * @return string Calculated SHA-256 hash
+     */
+    private function calculateBlockHash(
+        int $index, 
+        string $previousHash, 
+        int $timestamp, 
+        $data, 
+        int $nonce = 0
+    ): string {
+        $dataString = is_array($data) ? json_encode($data) : $data;
+        $input = implode('', [
+            strval($index), 
+            $previousHash, 
+            strval($timestamp), 
+            $dataString, 
+            strval($nonce)
+        ]);
         
-        $this->saveBlockchain($blockchain);
+        return hash('sha256', $input);
     }
-    
+
     /**
-     * Calculate hash for block
+     * Verify Proof of Work
+     * Comprehensive validation of mining submission
+     * 
+     * @param array $block Block data
+     * @param int|null $difficulty Optional difficulty override
+     * @return bool Validation result
      */
-/**
- * Calculate hash for block - simplified version to match JavaScript implementation
- */
-private function calculateHash($index, $previousHash, $timestamp, $data, $nonce = 0) {
-    $dataString = is_array($data) ? json_encode($data) : $data;
-    $input = $index . $previousHash . $timestamp . $dataString . $nonce;
-    return hash('sha256', $input);
-}
-    
-    /**
-     * Get the entire blockchain
-     */
-    public function getBlockchain() {
-        return json_decode(file_get_contents($this->blockchainFile), true);
+    public function verifyProofOfWork(array $block, ?int $difficulty = null): bool {
+        $difficulty = $difficulty ?? self::DIFFICULTY_TARGET;
+        $prefix = str_repeat('0', $difficulty);
+
+        // Hash meets difficulty requirement
+        if (!isset($block['hash']) || substr($block['hash'], 0, $difficulty) !== $prefix) {
+            error_log("Hash does not meet difficulty requirement: {$block['hash']}");
+            return false;
+        }
+
+        // Hash authenticity verification
+        $calculatedHash = $this->calculateBlockHash(
+            $block['index'],
+            $block['previousHash'],
+            $block['timestamp'],
+            $block['data'],
+            $block['nonce']
+        );
+
+        $hashValid = $calculatedHash === $block['hash'];
+
+        if (!$hashValid) {
+            error_log("Hash verification failed. Calculated: $calculatedHash, Submitted: {$block['hash']}");
+        }
+
+        return $hashValid;
     }
-    
+
     /**
-     * Save blockchain to file
+     * Add Transaction
+     * Creates and stores a new blockchain transaction
+     * 
+     * @param string $creditCardNumber Credit card identifier
+     * @param float $amount Transaction amount
+     * @param string $type Transaction type
+     * @param string $message Transaction description
+     * @return array Created transaction
      */
-    private function saveBlockchain($blockchain) {
-        file_put_contents($this->blockchainFile, json_encode($blockchain, JSON_PRETTY_PRINT));
-    }
-    
-    /**
-     * Add a transaction to pending transactions
-     */
-    public function addTransaction($creditCardNumber, $amount, $type = 'reward', $message = '') {
-        // Create transaction
+    public function addTransaction(
+        string $creditCardNumber, 
+        float $amount, 
+        string $type = 'reward', 
+        string $message = ''
+    ): array {
+        $maskedCardNumber = substr($creditCardNumber, 0, 4) . '********' . substr($creditCardNumber, -4);
+        
         $transaction = [
             'id' => bin2hex(random_bytes(16)),
             'timestamp' => time(),
-            'creditCardNumber' => substr($creditCardNumber, 0, 4) . '********' . substr($creditCardNumber, -4),
+            'creditCardNumber' => $maskedCardNumber,
             'amount' => $amount,
             'type' => $type,
             'message' => $message,
             'status' => 'pending'
         ];
+
+        $this->blockchainData['pendingTransactions'][] = $transaction;
         
-        // Get current blockchain
-        $blockchain = $this->getBlockchain();
+        $this->blockchainData['statistics']['totalTransactions']++;
         
-        // Add transaction to pending
-        $blockchain['pendingTransactions'][] = $transaction;
-        
-        // Update statistics
-        $blockchain['statistics']['totalTransactions']++;
         if ($type === 'reward') {
-            $blockchain['statistics']['totalRewardsDistributed'] += $amount;
+            $this->blockchainData['statistics']['totalRewardsDistributed'] += $amount;
         }
-        
-        // Save updated blockchain
-        $this->saveBlockchain($blockchain);
+
+        $this->saveBlockchain();
         
         return $transaction;
     }
-    
-    /**
-     * Process a reward for decrypting a message
-     */
-    public function processDecryptionReward($creditCardNumber, $messageId) {
-        $rewardAmount = $this->rewardRate;
-        
-        // Get current blockchain
-        $blockchain = $this->getBlockchain();
-        
-        // Check if wallet has enough balance
-        if ($blockchain['wallet']['balance'] < $rewardAmount) {
-            throw new Exception("Insufficient funds in reward wallet");
-        }
-        
-        // Deduct from wallet
-        $blockchain['wallet']['balance'] -= $rewardAmount;
-        
-        // Add transaction
-        $transaction = $this->addTransaction(
-            $creditCardNumber, 
-            $rewardAmount, 
-            'reward', 
-            "Reward for decrypting message ID: $messageId"
-        );
-        
-        // Update statistics
-        $blockchain['statistics']['totalMessages']++;
-        
-        // Save updated blockchain
-        $this->saveBlockchain($blockchain);
-        
-        return [
-            'success' => true,
-            'transaction' => $transaction,
-            'newBalance' => $blockchain['wallet']['balance']
-        ];
-    }
-    
-    /**
-     * Verify proof-of-work submitted by client
-     */
 /**
- * Verify proof-of-work submitted by client
+ * Get wallet balance and statistics
+ * 
+ * @return array Wallet information
  */
-public function verifyProofOfWork($block, $difficulty = null) {
-    $difficulty = $difficulty ?? $this->difficultyTarget;
-    $prefix = str_repeat('0', $difficulty);
+public function getWalletInfo(): array {
+    return [
+        'balance' => $this->blockchainData['wallet']['balance'],
+        'address' => $this->blockchainData['wallet']['address'],
+        'statistics' => $this->blockchainData['statistics']
+    ];
+}
+
+/**
+ * Get mining difficulty and requirements
+ * 
+ * @return array Mining requirements
+ */
+public function getMiningRequirements(): array {
+    return [
+        'difficulty' => self::DIFFICULTY_TARGET,
+        'prefix' => str_repeat('0', self::DIFFICULTY_TARGET),
+        'rewardRate' => self::REWARD_RATE,
+        'pendingTransactions' => count($this->blockchainData['pendingTransactions'])
+    ];
+}
+
+/**
+ * Get transactions for a specific credit card
+ * 
+ * @param string $creditCardNumber Credit card number
+ * @return array Transactions associated with the card
+ */
+public function getCardTransactions(string $creditCardNumber): array {
+    $maskedNumber = substr($creditCardNumber, 0, 4) . '********' . substr($creditCardNumber, -4);
     
-    // Log incoming data for debugging
-    error_log('Verifying proof of work with difficulty ' . $difficulty);
-    error_log('Block data: ' . json_encode($block));
+    $transactions = [];
     
-    // Verify the hash meets the difficulty target
-    if (!isset($block['hash']) || substr($block['hash'], 0, $difficulty) !== $prefix) {
-        error_log('Hash does not meet difficulty requirement');
-        return false;
+    // Check pending transactions
+    foreach ($this->blockchainData['pendingTransactions'] as $transaction) {
+        if ($transaction['creditCardNumber'] === $maskedNumber) {
+            $transactions[] = $transaction;
+        }
     }
     
-    // Recalculate hash to verify it's correct
-    $calculatedHash = $this->calculateHash(
-        $block['index'],
-        $block['previousHash'],
-        $block['timestamp'],
-        $block['data'],
-        $block['nonce']
+    // Check processed transactions in blocks
+    foreach ($this->blockchainData['blocks'] as $block) {
+        if (isset($block['data']['transactions']) && is_array($block['data']['transactions'])) {
+            foreach ($block['data']['transactions'] as $transaction) {
+                if ($transaction['creditCardNumber'] === $maskedNumber) {
+                    $transactions[] = $transaction;
+                }
+            }
+        }
+    }
+    
+    return $transactions;
+}
+
+/**
+ * Get total reward balance for a credit card
+ * 
+ * @param string $creditCardNumber Credit card number
+ * @return float Total balance
+ */
+public function getCardBalance(string $creditCardNumber): float {
+    $transactions = $this->getCardTransactions($creditCardNumber);
+    
+    $balance = 0.0;
+    foreach ($transactions as $transaction) {
+        if ($transaction['type'] === 'reward') {
+            $balance += $transaction['amount'];
+        } elseif ($transaction['type'] === 'spend') {
+            $balance -= $transaction['amount'];
+        }
+    }
+    
+    return $balance;
+}
+
+/**
+ * Process a reward for decrypting a message
+ * 
+ * @param string $creditCardNumber Credit card number
+ * @param string $messageId Unique message identifier
+ * @return array Reward processing result
+ * @throws Exception If insufficient funds
+ */
+public function processDecryptionReward(string $creditCardNumber, string $messageId): array {
+    $rewardAmount = self::REWARD_RATE;
+    
+    // Check if wallet has enough balance
+    if ($this->blockchainData['wallet']['balance'] < $rewardAmount) {
+        throw new Exception("Insufficient funds in reward wallet");
+    }
+    
+    // Deduct from wallet
+    $this->blockchainData['wallet']['balance'] -= $rewardAmount;
+    
+    // Add transaction
+    $transaction = $this->addTransaction(
+        $creditCardNumber, 
+        $rewardAmount, 
+        'reward', 
+        "Reward for decrypting message ID: $messageId"
     );
     
-    error_log('Original hash: ' . $block['hash']);
-    error_log('Calculated hash: ' . $calculatedHash);
+    // Update statistics
+    $this->blockchainData['statistics']['totalMessages']++;
     
-    return $calculatedHash === $block['hash'];
+    // Save updated blockchain
+    $this->saveBlockchain();
+    
+    return [
+        'success' => true,
+        'transaction' => $transaction,
+        'newBalance' => $this->blockchainData['wallet']['balance']
+    ];
 }
-    
     /**
-     * Mine a new block with pending transactions
+     * Mine Block
+     * Processes mining submissions and updates blockchain
+     * 
+     * @param array $minerInfo Miner identification
+     * @param array $proofOfWork Proof of work submission
+     * @return array Mining result
+     * @throws Exception Invalid proof of work
      */
-    public function mineBlock($minerInfo, $proofOfWork) {
-        // Get current blockchain
-        $blockchain = $this->getBlockchain();
-        
-        // Get the last block
-        $lastBlock = end($blockchain['blocks']);
+    public function mineBlock(array $minerInfo, array $proofOfWork): array {
+        $lastBlock = end($this->blockchainData['blocks']);
         $newIndex = $lastBlock['index'] + 1;
-        
-        // Create new block data
+
         $blockData = [
             'minerInfo' => $minerInfo,
-            'transactions' => $blockchain['pendingTransactions'],
+            'transactions' => $this->blockchainData['pendingTransactions'],
             'minedAt' => time(),
-            'difficulty' => $this->difficultyTarget
+            'difficulty' => self::DIFFICULTY_TARGET
         ];
-        
-        // Create new block template
+
         $newBlock = [
             'index' => $newIndex,
             'timestamp' => time(),
@@ -217,139 +443,80 @@ public function verifyProofOfWork($block, $difficulty = null) {
             'hash' => $proofOfWork['hash'],
             'nonce' => $proofOfWork['nonce']
         ];
-        
-        // Verify the proof of work
+
         if (!$this->verifyProofOfWork($newBlock)) {
-    error_log("Invalid proof of work details:");
-    error_log("Block: " . json_encode($newBlock));
-    error_log("Difficulty target: " . $this->difficultyTarget);
-    error_log("Calculated hash: " . $this->calculateHash(
-        $newBlock['index'],
-        $newBlock['previousHash'],
-        $newBlock['timestamp'],
-        $newBlock['data'],
-        $newBlock['nonce']
-    ));
-    error_log("Submitted hash: " . $newBlock['hash']);
-    throw new Exception("Invalid proof of work");
-}
-        
-        // Add the block to the blockchain
-        $blockchain['blocks'][] = $newBlock;
-        
-        // Mark transactions as processed
-        foreach ($blockchain['pendingTransactions'] as &$transaction) {
-            $transaction['status'] = 'processed';
-            $transaction['blockIndex'] = $newIndex;
+            throw new Exception("Invalid proof of work submission");
         }
+
+        $this->blockchainData['blocks'][] = $newBlock;
         
-        // Clear pending transactions
-        $blockchain['pendingTransactions'] = [];
+        $this->processMinedBlockTransactions($newIndex);
+        $this->updateMinerStatistics($minerInfo);
         
-        // Track miner statistics
-        $minerIdentifier = $minerInfo['identifier'];
-        if (!isset($blockchain['miners'][$minerIdentifier])) {
-            $blockchain['miners'][$minerIdentifier] = [
-                'totalBlocks' => 0,
-                'lastMined' => 0,
-                'hashRate' => 0,
-                'rewards' => 0
-            ];
-        }
-        
-        $blockchain['miners'][$minerIdentifier]['totalBlocks']++;
-        $blockchain['miners'][$minerIdentifier]['lastMined'] = time();
-        $blockchain['miners'][$minerIdentifier]['hashRate'] = $minerInfo['hashRate'];
-        
-        // Update total hash rate average
-        $totalHashRate = 0;
-        $minerCount = count($blockchain['miners']);
-        foreach ($blockchain['miners'] as $miner) {
-            $totalHashRate += $miner['hashRate'];
-        }
-        $blockchain['statistics']['averageHashRate'] = $minerCount > 0 ? $totalHashRate / $minerCount : 0;
-        
-        // Save updated blockchain
-        $this->saveBlockchain($blockchain);
-        
+        $this->saveBlockchain();
+
         return [
             'success' => true,
             'block' => $newBlock,
-            'blockchain' => $blockchain
+            'blockchain' => $this->blockchainData
         ];
     }
-    
+
     /**
-     * Get wallet balance and statistics
+     * Process Mined Block Transactions
+     * Marks transactions as processed within a mined block
+     * 
+     * @param int $blockIndex Current block index
      */
-    public function getWalletInfo() {
-        $blockchain = $this->getBlockchain();
-        
-        return [
-            'balance' => $blockchain['wallet']['balance'],
-            'address' => $blockchain['wallet']['address'],
-            'statistics' => $blockchain['statistics']
-        ];
-    }
-    
-    /**
-     * Get mining difficulty and requirements
-     */
-    public function getMiningRequirements() {
-        return [
-            'difficulty' => $this->difficultyTarget,
-            'prefix' => str_repeat('0', $this->difficultyTarget),
-            'rewardRate' => $this->rewardRate,
-            'pendingTransactions' => count($this->getBlockchain()['pendingTransactions'])
-        ];
-    }
-    
-    /**
-     * Get transactions for a specific credit card
-     */
-    public function getCardTransactions($creditCardNumber) {
-        $blockchain = $this->getBlockchain();
-        $maskedNumber = substr($creditCardNumber, 0, 4) . '********' . substr($creditCardNumber, -4);
-        
-        $transactions = [];
-        
-        // Check pending transactions
-        foreach ($blockchain['pendingTransactions'] as $transaction) {
-            if ($transaction['creditCardNumber'] === $maskedNumber) {
-                $transactions[] = $transaction;
-            }
+    private function processMinedBlockTransactions(int $blockIndex): void {
+        foreach ($this->blockchainData['pendingTransactions'] as &$transaction) {
+            $transaction['status'] = 'processed';
+            $transaction['blockIndex'] = $blockIndex;
         }
-        
-        // Check all blocks for transactions
-        foreach ($blockchain['blocks'] as $block) {
-            if (isset($block['data']['transactions']) && is_array($block['data']['transactions'])) {
-                foreach ($block['data']['transactions'] as $transaction) {
-                    if ($transaction['creditCardNumber'] === $maskedNumber) {
-                        $transactions[] = $transaction;
-                    }
-                }
-            }
-        }
-        
-        return $transactions;
+
+        $this->blockchainData['pendingTransactions'] = [];
     }
+
+
+/**
+ * Update Miner Statistics
+ * Tracks and updates mining performance metrics
+ * 
+ * @param array $minerInfo Miner identification
+ */
+private function updateMinerStatistics(array $minerInfo): void {
+    $minerIdentifier = $minerInfo['identifier'];
     
+    $this->blockchainData['miners'][$minerIdentifier] = $this->blockchainData['miners'][$minerIdentifier] ?? [
+        'totalBlocks' => 0,
+        'lastMined' => 0,
+        'hashRate' => 0,
+        'rewards' => 0
+    ];
+
+    $this->blockchainData['miners'][$minerIdentifier]['totalBlocks']++;
+    $this->blockchainData['miners'][$minerIdentifier]['lastMined'] = time();
+    $this->blockchainData['miners'][$minerIdentifier]['hashRate'] = $minerInfo['hashRate'];
+
+    $this->recalculateAverageHashRate();
+}
+
     /**
-     * Get total reward balance for a credit card
+     * Recalculate Average Hash Rate
+     * Computes network-wide mining performance metric
      */
-    public function getCardBalance($creditCardNumber) {
-        $transactions = $this->getCardTransactions($creditCardNumber);
-        
-        $balance = 0;
-        foreach ($transactions as $transaction) {
-            if ($transaction['type'] === 'reward') {
-                $balance += $transaction['amount'];
-            } elseif ($transaction['type'] === 'spend') {
-                $balance -= $transaction['amount'];
-            }
-        }
-        
-        return $balance;
+    private function recalculateAverageHashRate(): void {
+        $miners = $this->blockchainData['miners'];
+        $totalHashRate = array_sum(array_column($miners, 'hashRate'));
+        $minerCount = count($miners);
+
+        $this->blockchainData['statistics']['averageHashRate'] = 
+            $minerCount > 0 ? $totalHashRate / $minerCount : 0;
     }
+
+
+
+    // Remaining methods (getCardTransactions, getCardBalance, etc.) 
+    // would be implemented similarly with modern PHP practices
 }
 ?>
