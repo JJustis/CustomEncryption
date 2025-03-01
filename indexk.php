@@ -2609,7 +2609,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'download-credit-card') {
     <title>Infinite Mandelbrot Character Space Cipher</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  
+<script src="transactions.js"></script>
 <script src="blockchain.js"></script>
  <style>
         :root {
@@ -2907,6 +2907,79 @@ if (isset($_GET['action']) && $_GET['action'] === 'download-credit-card') {
 <body>
 <div id="notification-area"></div>
     <div class="container my-5">
+	<!-- Navigation Bar Addition -->
+<div class="navigation-links mb-3">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="custom-card">
+                <div class="card-body py-2">
+                    <ul class="nav nav-pills">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#mandelbrot-section">
+                                <i class="fas fa-infinity me-1"></i>Mandelbrot Cipher
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#transaction-section">
+                                <i class="fas fa-exchange-alt me-1"></i>Transactions
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="blockchain-page.php">
+                                <i class="fas fa-link me-1"></i>Blockchain Explorer
+                            </a>
+                        </li>
+                        <li class="nav-item ms-auto">
+                            <span class="nav-link text-muted">
+                                <i class="fas fa-coins me-1"></i>Your Balance: <span id="nav-balance">0.00</span>
+                            </span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Update section navigation
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle section navigation
+    const navLinks = document.querySelectorAll('.nav-pills .nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            if (this.getAttribute('href').startsWith('#')) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 20,
+                        behavior: 'smooth'
+                    });
+                }
+                
+                // Update active state
+                navLinks.forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+            }
+        });
+    });
+    
+    // Update navigation balance when card balance changes
+    const updateNavBalance = () => {
+        const cardBalance = document.getElementById('card-balance');
+        const navBalance = document.getElementById('nav-balance');
+        if (cardBalance && navBalance) {
+            navBalance.textContent = cardBalance.textContent;
+        }
+    };
+    
+    // Call initially and set up interval
+    updateNavBalance();
+    setInterval(updateNavBalance, 5000);
+});
+</script>
         <h1 class="mb-4 text-center mandelbrot-title">
             <i class="fas fa-infinity me-2"></i> Infinite Mandelbrot Character Space Cipher
         </h1>
@@ -2915,6 +2988,322 @@ if (isset($_GET['action']) && $_GET['action'] === 'download-credit-card') {
         <i class="fas fa-link me-1"></i>Blockchain Rewards
     </a>
 </li>
+<!-- Transaction & Payments Section -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="custom-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Transactions & Payments</h5>
+                <button class="btn btn-sm btn-outline-primary" id="refresh-transactions">
+                    <i class="fas fa-sync-alt me-1"></i>Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Send & Request Tabs -->
+                    <div class="col-md-6">
+                        <ul class="nav nav-tabs mb-3" id="transactionTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="send-tab" data-bs-toggle="tab" data-bs-target="#send-payment-tab" type="button" role="tab">
+                                    <i class="fas fa-paper-plane me-1"></i>Send
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="request-tab" data-bs-toggle="tab" data-bs-target="#request-payment-tab" type="button" role="tab">
+                                    <i class="fas fa-hand-holding-usd me-1"></i>Request
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="qr-tab" data-bs-toggle="tab" data-bs-target="#qr-payment-tab" type="button" role="tab">
+                                    <i class="fas fa-qrcode me-1"></i>QR
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="transactionTabContent">
+                            <!-- Send Payment Tab -->
+                            <div class="tab-pane fade show active" id="send-payment-tab" role="tabpanel">
+                                <form id="send-payment-form">
+                                    <div class="mb-3">
+                                        <label for="recipient-card" class="form-label">Recipient Card Number</label>
+                                        <input type="text" class="form-control" id="recipient-card" placeholder="Enter recipient's card number" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="payment-amount" class="form-label">Amount</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-coins"></i></span>
+                                            <input type="number" class="form-control" id="payment-amount" placeholder="0.00" step="0.01" min="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="payment-memo" class="form-label">Memo (Optional)</label>
+                                        <textarea class="form-control" id="payment-memo" rows="2" placeholder="Add a note"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">
+                                        <i class="fas fa-paper-plane me-2"></i>Send Payment
+                                    </button>
+                                </form>
+                            </div>
+                            
+                            <!-- Request Payment Tab -->
+                            <div class="tab-pane fade" id="request-payment-tab" role="tabpanel">
+                                <form id="request-payment-form">
+                                    <div class="mb-3">
+                                        <label for="payer-card" class="form-label">Payer Card Number</label>
+                                        <input type="text" class="form-control" id="payer-card" placeholder="Enter payer's card number" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="request-amount" class="form-label">Amount</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-coins"></i></span>
+                                            <input type="number" class="form-control" id="request-amount" placeholder="0.00" step="0.01" min="0.01" required>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="request-memo" class="form-label">Memo (Optional)</label>
+                                        <textarea class="form-control" id="request-memo" rows="2" placeholder="Add a reason for request"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-outline-primary w-100">
+                                        <i class="fas fa-hand-holding-usd me-2"></i>Request Payment
+                                    </button>
+                                </form>
+                            </div>
+                            
+                            <!-- QR Payment Tab -->
+                            <div class="tab-pane fade" id="qr-payment-tab" role="tabpanel">
+                                <div class="mb-3">
+                                    <label for="qr-amount" class="form-label">Amount to Request</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-coins"></i></span>
+                                        <input type="number" class="form-control" id="qr-amount" placeholder="0.00" step="0.01" min="0.01">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="qr-memo" class="form-label">Memo (Optional)</label>
+                                    <input type="text" class="form-control" id="qr-memo" placeholder="Add a note">
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <button id="generate-qr-button" class="btn btn-primary flex-fill me-2">
+                                        <i class="fas fa-qrcode me-1"></i> Generate QR
+                                    </button>
+                                    <button id="scan-qr-button" class="btn btn-outline-primary flex-fill">
+                                        <i class="fas fa-camera me-1"></i> Scan QR
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Transaction History & Card Balance -->
+                    <div class="col-md-6">
+                        <!-- Credit Card Balance -->
+                        <div class="credit-card-display mb-3" style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); border-radius: 12px; padding: 15px; color: white; position: relative; overflow: hidden;">
+                            <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiIHN0cm9rZS13aWR0aD0iMTAiLz48L3N2Zz4='); background-size: 150px; opacity: 0.1;"></div>
+                            
+                            <!-- Chip -->
+                            <div style="width: 40px; height: 30px; background: linear-gradient(135deg, #fa7, #ffd700); border-radius: 5px; margin-bottom: 15px;"></div>
+                            
+                            <!-- Card Number -->
+                            <div style="font-size: 1.3rem; font-family: 'Courier New', monospace; letter-spacing: 2px; margin-bottom: 15px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);" class="card-number-display">**** **** **** ****</div>
+                            
+                            <!-- Card Details -->
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <span style="font-size: 0.7rem; opacity: 0.8;">CARD HOLDER</span>
+                                    <div style="font-weight: bold; font-size: 0.9rem;">REWARDS USER</div>
+                                </div>
+                                <div>
+                                    <span style="font-size: 0.7rem; opacity: 0.8;">BALANCE</span>
+                                    <div style="font-weight: bold; font-size: 0.9rem;" id="card-balance">0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Transaction History Tabs -->
+                        <ul class="nav nav-tabs mb-3" id="historyTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active transaction-tab" id="history-tab" data-bs-toggle="tab" data-bs-target="#transaction-history-tab" type="button" role="tab" data-tab-type="history">
+                                    <i class="fas fa-history me-1"></i>History
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link transaction-tab" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending-requests-tab" type="button" role="tab" data-tab-type="pending">
+                                    <i class="fas fa-clock me-1"></i>Pending
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="historyTabContent">
+                            <!-- Transaction History -->
+                            <div class="tab-pane fade show active transaction-content" id="transaction-history-tab" role="tabpanel" data-tab-type="history">
+                                <div id="transaction-history" style="max-height: 250px; overflow-y: auto;">
+                                    <p class="text-center text-muted">No transaction history</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Pending Requests -->
+                            <div class="tab-pane fade transaction-content" id="pending-requests-tab" role="tabpanel" data-tab-type="pending">
+                                <div id="pending-requests" style="max-height: 250px; overflow-y: auto;">
+                                    <p class="text-center text-muted">No pending requests</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Modal -->
+<div class="modal fade" id="qr-code-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Payment QR Code</h5>
+                <button type="button" class="btn-close close-modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div id="qr-code-display" class="mb-3">
+                    <div class="qr-code-placeholder" style="background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px auto; max-width: 200px; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+                        <span>QR Code will display here</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <span class="text-muted">Amount:</span>
+                    <span id="qr-amount-display" class="fw-bold">0.00</span>
+                </div>
+                <div class="mb-3">
+                    <span class="text-muted">Memo:</span>
+                    <span id="qr-memo-display">No memo</span>
+                </div>
+                <p class="small text-muted">Show this QR code to the sender to receive payment</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary close-modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scan QR Modal -->
+<div class="modal fade" id="scan-qr-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Scan QR Code</h5>
+                <button type="button" class="btn-close close-modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="qr-scanner-container" class="mb-3 text-center">
+                    <p>In a real implementation, a camera interface would be here</p>
+                    <p>For this demo, please paste the QR code data below:</p>
+                </div>
+                <div class="mb-3">
+                    <label for="qr-data-input" class="form-label">QR Code Data</label>
+                    <textarea class="form-control" id="qr-data-input" rows="5" placeholder="Paste QR code data here"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="transactionInterface.processScannedQR()">Process Payment</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript to initialize transactions UI -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize transaction interface 
+    if (typeof TransactionInterface !== 'undefined') {
+        window.transactionInterface = new TransactionInterface();
+    } else {
+        // Create a simplified version if the full TransactionInterface isn't available
+        class SimpleTransactionInterface {
+            constructor() {
+                this.setupEventListeners();
+            }
+            
+            setupEventListeners() {
+                // Show notification for click events if the full system isn't loaded
+                const showNotImplemented = (e) => {
+                    e.preventDefault();
+                    this.showNotification('This feature requires the full transaction system to be loaded.', 'info');
+                };
+                
+                document.getElementById('send-payment-form')?.addEventListener('submit', showNotImplemented);
+                document.getElementById('request-payment-form')?.addEventListener('submit', showNotImplemented);
+                document.getElementById('generate-qr-button')?.addEventListener('click', showNotImplemented);
+                document.getElementById('scan-qr-button')?.addEventListener('click', showNotImplemented);
+            }
+            
+            showNotification(message, type = 'info') {
+                const notification = document.createElement('div');
+                notification.className = `alert alert-${type} alert-dismissible fade show`;
+                notification.innerHTML = `
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                `;
+                
+                // Add to notification area
+                const notificationArea = document.getElementById('notification-area');
+                if (notificationArea) {
+                    notificationArea.appendChild(notification);
+                    
+                    // Auto-remove after 5 seconds
+                    setTimeout(() => {
+                        notification.classList.remove('show');
+                        setTimeout(() => notification.remove(), 500);
+                    }, 5000);
+                }
+            }
+            
+            processScannedQR() {
+                this.showNotification('QR scanning requires the full transaction system to be loaded.', 'info');
+            }
+        }
+        
+        window.transactionInterface = new SimpleTransactionInterface();
+    }
+    
+    // Function to load the transactions.js script if it's not already loaded
+    function loadTransactionsScript() {
+        if (typeof TransactionInterface === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'transactions.js';
+            script.onload = () => {
+                window.transactionInterface = new TransactionInterface();
+                console.log('Transactions system loaded');
+            };
+            document.head.appendChild(script);
+        }
+    }
+    
+    // Attempt to load the transactions script
+    loadTransactionsScript();
+    
+    // Event listener for modal close buttons
+    document.querySelectorAll('.close-modal').forEach(button => {
+        button.addEventListener('click', () => {
+            const modal = button.closest('.modal');
+            if (modal) {
+                const modalInstance = bootstrap.Modal.getInstance(modal);
+                if (modalInstance) {
+                    modalInstance.hide();
+                } else {
+                    // Fallback if Bootstrap JS isn't fully initialized
+                    modal.classList.remove('show');
+                    modal.style.display = 'none';
+                    document.body.classList.remove('modal-open');
+                    const backdrop = document.querySelector('.modal-backdrop');
+                    if (backdrop) backdrop.remove();
+                }
+            }
+        });
+    });
+});
+</script>
         <div class="row mb-4">
             <div class="col-md-12">
                 <div class="custom-card">
@@ -3390,7 +3779,27 @@ if (isset($_GET['action']) && $_GET['action'] === 'download-credit-card') {
             </div>
         </div>
     </div>
-    
+    <script>
+// Initialize transaction interface if it hasn't been initialized
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof window.transactionInterface === 'undefined') {
+        console.log('Manually initializing transaction interface');
+        
+        // Try to load the script again
+        const script = document.createElement('script');
+        script.src = 'transactions.js';
+        script.onload = function() {
+            if (typeof TransactionInterface !== 'undefined') {
+                window.transactionInterface = new TransactionInterface();
+                console.log('Transaction interface initialized successfully');
+            } else {
+                console.error('Failed to load TransactionInterface class');
+            }
+        };
+        document.head.appendChild(script);
+    }
+});
+</script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
 // Credit Card Temporal Encryption Workflow

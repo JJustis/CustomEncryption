@@ -68,44 +68,50 @@ echo json_encode([
             }
             break;
             
-        case 'submit-proof-of-work':
-            // Validate required parameters
-            if (!isset($_POST['minerInfo']) || !isset($_POST['proofOfWork'])) {
-                error_log('Missing required parameters for proof of work');
-                throw new Exception('Missing required parameters');
-            }
-            
-            // Parse JSON data
-            $minerInfo = json_decode($_POST['minerInfo'], true);
-            $proofOfWork = json_decode($_POST['proofOfWork'], true);
-            
-            // Debug logging
-            error_log('Received minerInfo: ' . $_POST['minerInfo']);
-            error_log('Received proofOfWork: ' . $_POST['proofOfWork']);
-            
-            // Validate parsed data
-            if (!$minerInfo || !$proofOfWork) {
-                error_log('Invalid JSON data in proof of work submission');
-                throw new Exception('Invalid JSON data');
-            }
-            
-            try {
-                // Process the mining submission
-                $result = $blockchainRewards->mineBlock($minerInfo, $proofOfWork);
-                echo json_encode([
-                    'success' => true,
-                    'result' => $result
-                ]);
-            } catch (Exception $e) {
-                error_log('Proof of Work Submission Error: ' . $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString());
-                
-                http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'An error occurred while processing the proof of work. Please try again.'
-                ]);
-            }
-            break;
+case 'submit-proof-of-work':
+    try {
+        // Ultra-verbose logging
+        error_log('Proof of Work Submission Received');
+        error_log('Raw Input JSON: ' . file_get_contents('php://input'));
+        
+        // Parse input with error checking
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, TRUE);
+        
+        // Detailed parameter validation
+        if (!isset($input['proofOfWork']) || !isset($input['minerInfo'])) {
+            error_log('Missing required proof of work parameters');
+            throw new Exception('Invalid submission: Missing proofOfWork or minerInfo');
+        }
+        
+        // Log specific submission details
+        error_log('Submitted Block Index: ' . $input['proofOfWork']['block']['index']);
+        error_log('Submitted Block Previous Hash: ' . $input['proofOfWork']['block']['previousHash']);
+        error_log('Submitted Block Hash: ' . $input['proofOfWork']['hash']);
+        error_log('Submitted Block Nonce: ' . $input['proofOfWork']['nonce']);
+        
+        // Attempt to process mining submission
+        $result = $blockchainRewards->mineBlock($input['minerInfo'], $input['proofOfWork']);
+        
+        echo json_encode([
+            'success' => true,
+            'result' => $result
+        ]);
+    } catch (Exception $e) {
+        // Comprehensive error logging
+        error_log('Proof of Work Submission Error: ' . $e->getMessage());
+        error_log('Full Exception Trace: ' . $e->getTraceAsString());
+        error_log('Input Data: ' . print_r($input, true));
+        
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => 'Detailed processing error: ' . $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'inputData' => $input
+        ]);
+    }
+    break;
             
         case 'process-decryption-reward':
             // Validate required parameters

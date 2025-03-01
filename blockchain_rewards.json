@@ -14,16 +14,35 @@
             "nonce": 0
         }
     ],
-    "pendingTransactions": [],
+    "pendingTransactions": [
+        {
+            "id": "29098f3489de878bc23ecdcb5c4690db",
+            "timestamp": 1740842230,
+            "creditCardNumber": "4729********6593",
+            "amount": 0.1,
+            "type": "reward",
+            "message": "Reward for decrypting message ID: msg_0c84ce4a6ac6b2ee",
+            "status": "pending"
+        },
+        {
+            "id": "6943130435626f0cef0f1d67ed6fac5c",
+            "timestamp": 1740867525,
+            "creditCardNumber": "5282********3962",
+            "amount": 0.1,
+            "type": "reward",
+            "message": "Reward for decrypting message ID: msg_228efbddf1f0284a",
+            "status": "pending"
+        }
+    ],
     "wallet": {
-        "balance": 1000,
+        "balance": 999.8,
         "address": "master_wallet_d5a65c72d484dfef",
         "created": 1740792961
     },
     "statistics": {
-        "totalTransactions": 0,
-        "totalRewardsDistributed": 0,
-        "totalMessages": 0,
+        "totalTransactions": 2,
+        "totalRewardsDistributed": 0.2,
+        "totalMessages": 2,
         "averageHashRate": 0
     },
     "miners": []

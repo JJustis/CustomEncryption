@@ -277,72 +277,63 @@ startMining() {
     if (this.isMining) return;
 
     try {
-        // Ensure proper worker initialization
-        this.miningWorker = new Worker('miningWorker.js');
-        
-        // Robust message handling
-        this.miningWorker.onmessage = (event) => {
-            const data = event.data;
-            
-            switch (data.type) {
-                case 'status':
-                    this.updateMiningStatus(data);
-                    break;
-                
-                case 'stats':
-                    this.updateMiningStats(data);
-                    break;
-                
-                case 'success':
-                    this.handleMiningSuccess(data);
-                    break;
-                
-                case 'error':
-                    this.handleMiningError(data);
-                    break;
-            }
-        };
-
-        // Add error handling for worker
-        this.miningWorker.onerror = (error) => {
-            console.error('Mining worker error:', error);
-            this.stopMining();
-            this.showErrorNotification('Mining worker encountered an error. Mining has been stopped.');
-        };
-
-        // Create a new block to mine
+        // Create block to mine
         const newBlock = this.createNewBlockTemplate();
-        
-        // Ensure block exists and has required properties
         if (!newBlock) {
             throw new Error('Failed to create block template');
         }
-
-        // Start mining with explicit difficulty
+        
+        console.log("Starting mining with block:", newBlock);
+        
+        // Initialize worker
+        this.miningWorker = new Worker('miningWorker.js');
+        
+        // Set up message handler
+        this.miningWorker.onmessage = (event) => {
+            console.log("Received worker message:", event.data);
+            
+            if (!event.data || !event.data.type) {
+                console.error("Invalid message from worker");
+                return;
+            }
+            
+            switch (event.data.type) {
+                case 'stats':
+                    this.updateMiningStats(event.data);
+                    break;
+                    
+                case 'success':
+                    // If block is missing from the response, add it
+                    if (!event.data.block) {
+                        event.data.block = newBlock;
+                        event.data.block.nonce = event.data.nonce;
+                    }
+                    this.handleMiningSuccess(event.data);
+                    break;
+                    
+                case 'error':
+                    this.handleMiningError(event.data);
+                    break;
+            }
+        };
+        
+        // Set up error handler
+        this.miningWorker.onerror = (error) => {
+            console.error("Worker error:", error);
+            this.handleMiningError({
+                type: 'error',
+                message: error.message || "Unknown worker error"
+            });
+        };
+        
+        // Send the mining request - using the exact format the worker expects
         this.miningWorker.postMessage({
-            command: 'start-mining',
             block: newBlock,
             difficulty: this.difficulty || 4
         });
-
+        
         this.isMining = true;
         this.updateMiningStatus(true);
-
-        // Setup interval for stats (with additional error protection)
-        this.workerInterval = setInterval(() => {
-            if (this.miningWorker && this.isMining) {
-                try {
-                    this.miningWorker.postMessage({ command: 'get-stats' });
-                } catch (error) {
-                    console.error('Error requesting mining stats:', error);
-                    this.stopMining();
-                    this.showErrorNotification('Failed to communicate with mining worker. Mining has been stopped.');
-                }
-            } else {
-                clearInterval(this.workerInterval);
-            }
-        }, 1000);
-
     } catch (error) {
         console.error('Mining initialization error:', error);
         this.showErrorNotification('Failed to start mining: ' + error.message);
@@ -356,26 +347,56 @@ startMining() {
 handleMiningError(errorData) {
     console.error('Mining error:', errorData);
     
-    // Check if block is undefined
-    if (errorData.message.includes('block is undefined')) {
-        console.error('Block data is missing or undefined');
-        // Implement fallback or default behavior for missing block data
-        // For example, you can try to recreate the block template
-        const newBlock = this.createNewBlockTemplate();
-        if (newBlock) {
-            console.log('Retrying mining with new block template');
-            this.miningWorker.postMessage({
-                command: 'start-mining',
-                block: newBlock,
-                difficulty: this.difficulty || 4
-            });
+    // Check if error message contains specific error strings
+    if (errorData && errorData.message) {
+        if (errorData.message.includes('block is undefined')) {
+            console.log('Attempting to recover from undefined block error');
+            
+            // Check if blockchain data is available
+            if (this.blockchain && this.blockchain.blocks && this.blockchain.blocks.length > 0) {
+                // Try to recreate the block template
+                const newBlock = this.createNewBlockTemplate();
+                
+                if (newBlock && this.miningWorker) {
+                    console.log('Restarting mining with new block template:', newBlock);
+                    
+                    // Create a safe clone to ensure all properties are properly transferred
+                    const blockClone = {
+                        index: newBlock.index,
+                        timestamp: newBlock.timestamp,
+                        data: JSON.parse(JSON.stringify(newBlock.data)), // Deep clone
+                        previousHash: newBlock.previousHash,
+                        nonce: newBlock.nonce || 0
+                    };
+                    
+                    // Send the new block to the worker
+                    this.miningWorker.postMessage({
+                        command: 'start-mining',
+                        block: blockClone,
+                        difficulty: this.difficulty || 4
+                    });
+                    return;
+                }
+            }
+        } else if (errorData.message.includes('undefined has no properties')) {
+            console.log('Handling "undefined has no properties" error');
+            
+            // This suggests the worker is trying to access a property on undefined
+            // Let's restart the worker and try again with a more carefully constructed message
+            this.stopMining();
+            setTimeout(() => {
+                if (this.blockchain && this.blockchain.blocks && this.blockchain.blocks.length > 0) {
+                    console.log('Attempting to restart mining with simplified block structure');
+                    this.startMining();
+                }
+            }, 1000); // Wait 1 second before trying again
             return;
         }
     }
     
-    // If block is undefined or other errors occur, stop mining
+    // If recovery fails or it's a different error, stop mining
     this.stopMining();
-    this.showErrorNotification('Mining encountered an error: ' + errorData.message);
+    this.showErrorNotification('Mining error: ' + (errorData ? errorData.message : 'Unknown error'));
 }
 
 /**
@@ -419,9 +440,24 @@ createNewBlockTemplate() {
      */
     stopMining() {
         // Early return if not currently mining
-        if (!this.isMining) {
-            return;
-        }
+          if (this.isMining) return;
+
+    // Enhanced validation of blockchain data
+    if (!this.blockchain || !this.blockchain.blocks) {
+        console.error("No blockchain data available");
+        this.showErrorNotification("Cannot start mining: No blockchain data available.");
+        return;
+    }
+
+    if (this.blockchain.blocks.length === 0) {
+        console.error("Blockchain has no blocks");
+        this.showErrorNotification("Cannot start mining: Blockchain has no blocks.");
+        return;
+    }
+
+    console.log("Starting mining with blockchain:", this.blockchain);
+    console.log("Last block:", this.blockchain.blocks[this.blockchain.blocks.length - 1]);
+
         
         // Safely stop the worker
         try {
@@ -559,119 +595,215 @@ updateMiningProgress(data) {
     /**
      * Handle mining error
      */
-    handleMiningError(errorData) {
-        console.error('Mining error:', errorData);
-        this.stopMining();
-        this.showErrorNotification('Mining error occurred: ' + errorData.message);
+// Updated handleMiningError function that properly handles the 'block is undefined' error
+handleMiningError(errorData) {
+    console.error('Mining error:', errorData);
+    
+    // Check if error message contains 'block is undefined'
+    if (errorData && errorData.message && errorData.message.includes('block is undefined')) {
+        console.log('Attempting to recover from undefined block error');
+        
+        // Check if blockchain data is available
+        if (this.blockchain && this.blockchain.blocks && this.blockchain.blocks.length > 0) {
+            // Try to recreate the block template
+            const newBlock = this.createNewBlockTemplate();
+            
+            if (newBlock && this.miningWorker) {
+                console.log('Restarting mining with new block template:', newBlock);
+                
+                // Send the new block to the worker
+                this.miningWorker.postMessage({
+                    command: 'start-mining',
+                    block: newBlock,
+                    difficulty: this.difficulty || 4
+                });
+                return;
+            }
+        }
     }
+    
+    // If recovery fails or it's a different error, stop mining
+    this.stopMining();
+    this.showErrorNotification('Mining error: ' + (errorData ? errorData.message : 'Unknown error'));
+}
     
     /**
      * Handle successful mining
      */
-    async handleMiningSuccess(data) {
-        // Update UI
-        const statusElement = document.getElementById('mining-status');
-        if (statusElement) {
-            statusElement.textContent = `Block mined successfully! Hash: ${data.hash.substring(0, 12)}...`;
+async handleMiningSuccess(data) {
+    try {
+        // Validate input data
+        if (!data || !data.block) {
+            console.error("Mining success received but block data was missing");
+            this.showErrorNotification("Mining process completed but block data was missing");
+            this.stopMining();
+            return;
         }
         
         // Stop mining process
         this.stopMining();
         
-        // Calculate and verify the hash locally before submitting
+        // Fetch current blockchain state
+        const blockchainResponse = await fetch('api.php?action=get-blockchain');
+        const blockchainResult = await blockchainResponse.json();
+        const currentBlockchain = blockchainResult.blockchain;
+        
+        // Get the last block from the current blockchain
+        const lastBlock = currentBlockchain.blocks[currentBlockchain.blocks.length - 1];
+        
+        // Prepare block for submission
         const block = data.block;
+        
+        // Detailed hash verification
         const dataString = JSON.stringify(block.data);
-        const rawData = block.index + block.previousHash + block.timestamp + dataString + block.nonce;
+        const rawData = 
+            block.index + 
+            lastBlock.hash + 
+            block.timestamp + 
+            dataString + 
+            data.nonce;
         
-        console.log("Block being verified:", {
-            index: block.index,
-            previousHash: block.previousHash,
+        console.log("Detailed Hash Verification:", {
+            blockIndex: block.index,
+            previousHash: lastBlock.hash,
             timestamp: block.timestamp,
-            nonce: block.nonce,
-            data: block.data
+            nonce: data.nonce,
+            dataString: dataString
         });
-        console.log("Raw data for hash calculation:", rawData);
-        console.log("Expected hash from worker:", data.hash);
-        
-        // Verify hash using the raw block data
+
+        // Calculate hash using exact method
         const expectedHash = await this.calculateHash(rawData);
         
+        // Validate hash matches worker's hash
         if (expectedHash !== data.hash) {
-            console.error('Hash verification failed. Expected:', expectedHash, 'Received:', data.hash);
-            this.showErrorNotification('Mining result verification failed. Please try again.');
+            console.error('Hash Verification Failed', {
+                expectedHash: expectedHash,
+                workerHash: data.hash,
+                rawData: rawData
+            });
+            this.showErrorNotification('Hash verification failed. Please try again.');
             return;
         }
         
-        console.log('Hash verification successful.');
-        
-        // Prepare miner info
-        const minerInfo = {
-            identifier: this.generateMinerId(),
-            hashRate: data.hashRate,
-            hashesComputed: data.hashesComputed,
-            timeElapsed: data.timeElapsed,
-            userAgent: navigator.userAgent
+        // Prepare submission payload with extensive debugging
+        const payload = {
+            minerInfo: {
+                identifier: this.generateMinerId(),
+                timestamp: Date.now(),
+                hashRate: data.hashRate,
+                hashesComputed: data.hashesComputed,
+                timeElapsed: data.timeElapsed,
+                userAgent: navigator.userAgent
+            },
+            proofOfWork: {
+                hash: data.hash,
+                nonce: data.nonce,
+                block: {
+                    index: 1,
+                    timestamp: block.timestamp,
+                    previousHash: lastBlock.hash,
+                    data: {
+                        minerInfo: block.data.minerInfo,
+                        transactions: currentBlockchain.pendingTransactions || [],
+                        minedAt: block.data.minedAt
+                    },
+                    nonce: data.nonce
+                }
+            },
+            debugContext: {
+                rawDataUsedForHash: rawData,
+                calculatedHash: expectedHash,
+                originalWorkerHash: data.hash,
+                hashMatches: expectedHash === data.hash,
+                currentBlockchainState: {
+                    lastBlockIndex: lastBlock.index,
+                    lastBlockHash: lastBlock.hash,
+                    pendingTransactionsCount: currentBlockchain.pendingTransactions?.length || 0
+                },
+                submissionAttemptTimestamp: Date.now()
+            }
         };
         
-        // Prepare proof of work
-        const proofOfWork = {
-            hash: data.hash,
-            nonce: data.nonce,
-            block: block
-        };
+        console.log("Comprehensive Submission Payload:", JSON.stringify(payload, null, 2));
         
-        console.log("Submitting proof of work:", {
-            minerInfo: minerInfo,
-            proofOfWork: proofOfWork
+        // Submit proof of work with comprehensive error handling
+        const response = await fetch('api.php?action=submit-proof-of-work', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Mining-Diagnostic': 'full-details'
+            }
         });
         
-        // Submit proof of work to server
-               try {
-            const response = await fetch('api.php?action=submit-proof-of-work', {
-                method: 'POST',
-                body: JSON.stringify({
-                    minerInfo: minerInfo,
-                    proofOfWork: proofOfWork
-                }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Show success notification
-                this.showMiningSuccessNotification(result.data);
-                
-                // Refresh blockchain and wallet data
-                await this.fetchBlockchain();
-                await this.fetchWalletInfo();
-                await this.fetchMiningRequirements();
-            } else {
-                throw new Error(result.error);
-            }
-        } catch (error) {
-            console.error('Error submitting proof of work:', error);
-            this.showErrorNotification('Failed to submit proof of work: ' + error.message);
+        // Detailed response handling
+        const responseText = await response.text();
+        console.log('Raw Server Response:', responseText);
+        
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('Response Parsing Error:', parseError);
+            throw new Error(`Failed to parse server response: ${responseText}`);
         }
+        
+        // Validate response
+        if (!result.success) {
+            console.error('Proof of Work Submission Detailed Error:', {
+                error: result.error,
+                trace: result.trace,
+                inputData: result.inputData
+            });
+            
+            // Construct a more informative error message
+            const detailedErrorMessage = [
+                'Proof of Work Submission Failed',
+                `Error: ${result.error}`,
+                `Block Index: ${payload.proofOfWork.block.index}`,
+                `Hash: ${data.hash}`,
+                `Nonce: ${data.nonce}`,
+                `Previous Hash: ${payload.proofOfWork.block.previousHash}`
+            ].join('\n');
+            
+            throw new Error(detailedErrorMessage);
+        }
+        
+        // Success handling
+        console.log('Proof of Work Submission Successful:', result);
+        this.showMiningSuccessNotification(result.result);
+        
+        // Refresh data
+        await Promise.all([
+            this.fetchBlockchain(),
+            this.fetchWalletInfo(),
+            this.fetchMiningRequirements()
+        ]);
+        
     } catch (error) {
-        console.error('Mining success error:', error);
-        this.showErrorNotification('Mining success failed: ' + error.message);
+        console.error('Mining Submission Process Error:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+        });
+        
+        this.showErrorNotification(`Mining submission failed: ${error.message}`);
     }
+}
 
+// Ensure hash calculation matches server-side method exactly
+async calculateHash(input) {
+    // Use Web Crypto API for consistent hashing
+    const encoder = new TextEncoder();
+    const data = encoder.encode(input);
     
-    /**
-     * Calculate hash for given data
-     */
-    async calculateHash(data) {
-        const encoder = new TextEncoder();
-        const dataArray = encoder.encode(data);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', dataArray);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        return hashHex;
-    }
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    return hashHex;
+}
     
     /**
      * Show mining success notification
