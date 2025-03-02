@@ -33,30 +33,66 @@ class TransactionInterface {
     /**
      * Load credit card number from storage
      */
+/**
+ * Load credit card number from storage
+ */
 loadCreditCardNumber() {
     console.log('Attempting to load credit card number');
     
-    // Try to get from blockchain interface if available
-    if (window.blockchainInterface && window.blockchainInterface.creditCardNumber) {
+    // Try multiple sources to find the latest credit card
+    let cardFound = false;
+    
+    // First priority: Check if there's a newly generated card in the CreditCardTemporalCipher
+    if (window.temporalEncryption && window.temporalEncryption.creditCardNumber) {
+        console.log('Got card number from temporal encryption:', window.temporalEncryption.creditCardNumber);
+        this.creditCardNumber = window.temporalEncryption.creditCardNumber;
+        cardFound = true;
+    } 
+    // Second priority: Try to get from blockchain interface
+    else if (window.blockchainInterface && window.blockchainInterface.creditCardNumber) {
         console.log('Got card number from blockchain interface:', window.blockchainInterface.creditCardNumber);
         this.creditCardNumber = window.blockchainInterface.creditCardNumber;
-    } else {
-        // Try to get from localStorage
+        cardFound = true;
+    } 
+    // Last priority: Try to get from localStorage
+    else {
         const storedCard = localStorage.getItem('creditCardNumber');
         if (storedCard) {
             console.log('Got card number from localStorage:', storedCard);
             this.creditCardNumber = storedCard;
-        } else {
-            console.warn('No credit card number found');
+            cardFound = true;
         }
     }
     
     // Update UI if card number is available
-    if (this.creditCardNumber) {
+    if (cardFound) {
         this.updateCardDisplay();
+        // Save to other systems to ensure consistency
+        this.syncCreditCardAcrossSystems();
     } else {
-        console.error('No credit card number available. Please generate a credit card.');
-        this.showNotification('Please generate a credit card first', 'warning');
+        console.warn('No credit card number found');
+        // Show a gentle reminder instead of an error
+        this.showNotification('Please generate a credit card to use transactions', 'info');
+    }
+}
+
+/**
+ * Sync credit card number across all systems
+ */
+syncCreditCardAcrossSystems() {
+    if (!this.creditCardNumber) return;
+    
+    // Save to localStorage
+    localStorage.setItem('creditCardNumber', this.creditCardNumber);
+    
+    // Update blockchain interface if available
+    if (window.blockchainInterface) {
+        window.blockchainInterface.creditCardNumber = this.creditCardNumber;
+    }
+    
+    // Update temporal encryption if available
+    if (window.temporalEncryption) {
+        window.temporalEncryption.creditCardNumber = this.creditCardNumber;
     }
 }
     

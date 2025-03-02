@@ -209,37 +209,58 @@ class BlockchainInterface {
     /**
      * Process reward for decrypting a message
      */
-    async processDecryptionReward(creditCardNumber, messageId) {
-        try {
-            const formData = new FormData();
-            formData.append('creditCardNumber', creditCardNumber);
-            formData.append('messageId', messageId);
+   /**
+ * Process reward for decrypting a message
+ */
+async processDecryptionReward(creditCardNumber, messageId) {
+    const resultArea = document.getElementById('decrypt-reward-result');
+    
+    try {
+        const formData = new FormData();
+        formData.append('creditCardNumber', creditCardNumber);
+        formData.append('messageId', messageId);
+        
+        const response = await fetch('api.php?action=process-decryption-reward', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Reward collection success
+            resultArea.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>Reward Collected!</strong>
+                    <p>You earned ${data.result.transaction.amount} reserves.</p>
+                    <p>Message ID: ${messageId}</p>
+                </div>
+            `;
             
-            const response = await fetch('api.php?action=process-decryption-reward', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // Show reward notification
-                this.showRewardNotification(data.result);
-                
-                // Update card balance
-                await this.fetchCardBalance(creditCardNumber);
-                
-                // Update wallet info
-                await this.fetchWalletInfo();
-                
-                // Refresh blockchain
-                await this.fetchBlockchain();
-            }
-        } catch (error) {
-            console.error('Error processing decryption reward:', error);
-            this.showErrorNotification('Failed to process decryption reward. Please try again later.');
+            // Update card balance and blockchain
+            await this.fetchCardBalance(creditCardNumber);
+            await this.fetchWalletInfo();
+            await this.fetchBlockchain();
+        } else {
+            // Show error for duplicate or failed reward
+            resultArea.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Reward Collection Failed</strong>
+                    <p>${data.error || 'Unable to process decryption reward'}</p>
+                </div>
+            `;
         }
+    } catch (error) {
+        console.error('Error processing decryption reward:', error);
+        
+        resultArea.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Error</strong>
+                <p>Failed to process decryption reward: ${error.message}</p>
+            </div>
+        `;
     }
+}
     
     /**
      * Show reward notification

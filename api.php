@@ -114,31 +114,32 @@ case 'submit-proof-of-work':
     break;
             
         case 'process-decryption-reward':
-            // Validate required parameters
-            if (!isset($_POST['creditCardNumber']) || !isset($_POST['messageId'])) {
-                throw new Exception('Missing required parameters');
-            }
-            
-            $creditCardNumber = $_POST['creditCardNumber'];
-            $messageId = $_POST['messageId'];
-            
-            try {
-                // Process the reward
-                $result = $blockchainRewards->processDecryptionReward($creditCardNumber, $messageId);
-                echo json_encode([
-                    'success' => true,
-                    'result' => $result
-                ]);
-            } catch (Exception $e) {
-                error_log('Decryption Reward Processing Error: ' . $e->getMessage() . "\nStack Trace: " . $e->getTraceAsString());
-                
-                http_response_code(500);
-                echo json_encode([
-                    'success' => false,
-                    'error' => 'Failed to process decryption reward. Please try again later.'
-                ]);
-            }
-            break;
+    try {
+        // Validate required parameters
+        if (!isset($_POST['creditCardNumber']) || !isset($_POST['messageId'])) {
+            throw new Exception('Missing required parameters');
+        }
+        
+        $creditCardNumber = $_POST['creditCardNumber'];
+        $messageId = $_POST['messageId'];
+        
+        // Process the reward
+        $result = $blockchainRewards->processDecryptionReward($creditCardNumber, $messageId);
+        
+        echo json_encode([
+            'success' => true,
+            'result' => $result
+        ]);
+    } catch (Exception $e) {
+        error_log('Decryption Reward Processing Error: ' . $e->getMessage());
+        
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => $e->getMessage()
+        ]);
+    }
+    break;
             
         case 'get-wallet-info':
             try {

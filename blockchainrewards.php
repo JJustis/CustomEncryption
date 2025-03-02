@@ -384,10 +384,36 @@ public function getCardBalance(string $creditCardNumber): float {
  * @return array Reward processing result
  * @throws Exception If insufficient funds
  */
-public function processDecryptionReward(string $creditCardNumber, string $messageId): array {
-    $rewardAmount = self::REWARD_RATE;
+// Add these methods to the BlockchainRewards class in BlockchainRewards.php
+private const PROCESSED_MESSAGES_FILE = 'processed_messages.json';
+
+private function loadProcessedMessages() {
+    $file = __DIR__ . '/' . self::PROCESSED_MESSAGES_FILE;
+    
+    if (!file_exists($file)) {
+        return [];
+    }
+    
+    $data = json_decode(file_get_contents($file), true);
+    return $data ?: [];
+}
+
+private function saveProcessedMessages($processedMessages) {
+    $file = __DIR__ . '/' . self::PROCESSED_MESSAGES_FILE;
+    file_put_contents($file, json_encode($processedMessages, JSON_PRETTY_PRINT));
+}
+
+public function processDecryptionReward($creditCardNumber, $messageId) {
+    // Check if message has already been processed
+    $processedMessages = $this->loadProcessedMessages();
+    
+    if (isset($processedMessages[$messageId])) {
+        throw new Exception("Message $messageId has already been rewarded. No duplicate rewards allowed.");
+    }
     
     // Check if wallet has enough balance
+    $rewardAmount = self::REWARD_RATE;
+    
     if ($this->blockchainData['wallet']['balance'] < $rewardAmount) {
         throw new Exception("Insufficient funds in reward wallet");
     }
@@ -402,6 +428,16 @@ public function processDecryptionReward(string $creditCardNumber, string $messag
         'reward', 
         "Reward for decrypting message ID: $messageId"
     );
+    
+    // Track this message as processed
+    $processedMessages[$messageId] = [
+        'timestamp' => time(),
+        'creditCardNumber' => $creditCardNumber,
+        'transactionId' => $transaction['id']
+    ];
+    
+    // Save processed messages
+    $this->saveProcessedMessages($processedMessages);
     
     // Update statistics
     $this->blockchainData['statistics']['totalMessages']++;

@@ -3564,7 +3564,66 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
                 </div>
-                
+                <!-- Add this section near your transaction and credit card areas -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-unlock me-2"></i>Decrypt Reward Collection
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="decrypt-reward-form">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="decrypt-message-id" class="form-label">Message ID</label>
+                                <input type="text" class="form-control" id="decrypt-message-id" placeholder="Enter decrypted message ID" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="decrypt-reward-card" class="form-label">Credit Card Number</label>
+                                <input type="text" class="form-control" id="decrypt-reward-card" placeholder="Enter credit card number" required>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-coins me-2"></i>Collect Decryption Reward
+                    </button>
+                </form>
+                <div id="decrypt-reward-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener for decryption reward collection
+    document.getElementById('decrypt-reward-form')?.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get form values
+        const messageId = document.getElementById('decrypt-message-id').value;
+        const creditCardNumber = document.getElementById('decrypt-reward-card').value;
+        
+        // Trigger decryption reward processing
+        if (window.blockchainInterface) {
+            window.blockchainInterface.processDecryptionReward(creditCardNumber, messageId);
+        } else {
+            // Fallback notification if blockchain interface is not available
+            const resultArea = document.getElementById('decrypt-reward-result');
+            resultArea.innerHTML = `
+                <div class="alert alert-danger">
+                    Blockchain interface not available. Unable to process reward.
+                </div>
+            `;
+        }
+    });
+});
+</script>
                 <div class="custom-card">
                     <div class="card-header">
                         <h5 class="mb-0"><i class="fas fa-key me-2"></i>Encryption Result</h5>
@@ -3780,6 +3839,122 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
     <script>
+	/**
+ * Updates all credit card display elements across the application
+ * @param {string} cardNumber - The credit card number to display
+ */
+function updateAllCardDisplays(cardNumber) {
+    if (!cardNumber) return;
+    
+    console.log('Updating all card displays with:', cardNumber.substr(0, 4) + '...' + cardNumber.substr(-4));
+    
+    // Create masked version for display
+    const maskedCard = cardNumber.substr(0, 4) + ' **** **** ' + cardNumber.substr(-4);
+    
+    // Update all card number displays
+    document.querySelectorAll('.card-number-display').forEach(element => {
+        element.textContent = maskedCard;
+    });
+    
+    // Update all card number inputs
+    document.querySelectorAll('.card-number-input').forEach(element => {
+        element.value = cardNumber;
+    });
+    
+    // Save to localStorage for persistence
+    localStorage.setItem('creditCardNumber', cardNumber);
+    
+    // Update the transaction interface if available
+    if (window.transactionInterface) {
+        window.transactionInterface.creditCardNumber = cardNumber;
+        window.transactionInterface.updateCardDisplay();
+    }
+    
+    // Update the temporal cipher if available
+    if (window.temporalEncryption) {
+        window.temporalEncryption.creditCardNumber = cardNumber;
+    }
+    
+    // Update blockchain interface if available
+    if (window.blockchainInterface) {
+        window.blockchainInterface.creditCardNumber = cardNumber;
+        window.blockchainInterface.fetchCardBalance(cardNumber);
+    }
+    
+    // Notify the user (optional)
+    const notificationArea = document.getElementById('notification-area');
+    if (notificationArea) {
+        const notification = document.createElement('div');
+        notification.className = 'alert alert-info alert-dismissible fade show';
+        notification.innerHTML = `
+            Credit card ${maskedCard} is now active for transactions
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        notificationArea.appendChild(notification);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 500);
+        }, 5000);
+    }
+}
+
+// Attach this function to the window object so it can be called from anywhere
+window.updateAllCardDisplays = updateAllCardDisplays;
+
+	// Add a global event listener to catch any credit card generated events
+document.addEventListener('creditCardGenerated', function(event) {
+    const cardNumber = event.detail.creditCardNumber;
+    console.log('Credit card generated event caught:', cardNumber);
+    
+    // Update all relevant card displays on the page
+    const cardDisplayElements = document.querySelectorAll('.card-number-display');
+    cardDisplayElements.forEach(element => {
+        const maskedCard = maskCardNumber(cardNumber);
+        element.textContent = maskedCard;
+    });
+    
+    // Update card inputs
+    const cardInputElements = document.querySelectorAll('.card-number-input');
+    cardInputElements.forEach(element => {
+        element.value = cardNumber;
+    });
+    
+    // Update transaction interface if available
+    if (window.transactionInterface) {
+        window.transactionInterface.saveCreditCardNumber(cardNumber);
+        window.transactionInterface.loadTransactionHistory();
+        window.transactionInterface.loadPendingRequests();
+    }
+    
+    // Update any systems that need the card number
+    if (window.blockchainInterface) {
+        window.blockchainInterface.creditCardNumber = cardNumber;
+        window.blockchainInterface.fetchCardBalance(cardNumber);
+    }
+    
+    // Helper function to mask card number
+    function maskCardNumber(card) {
+        if (!card) return '';
+        return card.substr(0, 4) + ' **** **** ' + card.substr(-4);
+    }
+});
+
+// Also listen for DOM content loaded to ensure card displays are updated
+document.addEventListener('DOMContentLoaded', function() {
+    // Check for stored card number
+    const storedCard = localStorage.getItem('creditCardNumber');
+    if (storedCard) {
+        // Update displays with stored card
+        const cardDisplayElements = document.querySelectorAll('.card-number-display');
+        cardDisplayElements.forEach(element => {
+            const maskedCard = storedCard.substr(0, 4) + ' **** **** ' + storedCard.substr(-4);
+            element.textContent = maskedCard;
+        });
+    }
+});
 // Initialize transaction interface if it hasn't been initialized
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof window.transactionInterface === 'undefined') {
@@ -3802,14 +3977,99 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+	/**
+ * This script initializes and synchronizes the credit card and transaction systems
+ * It ensures the latest credit card is displayed in the card preview area
+ */
+(function() {
+    // Execute when DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing credit card and transaction systems');
+        
+        // Step 1: Check for stored credit card number
+        const storedCard = localStorage.getItem('creditCardNumber');
+        
+        // Step 2: Initialize the temporal encryption system if needed
+        if (!window.temporalEncryption) {
+            console.log('Creating temporal encryption instance');
+            window.temporalEncryption = new CreditCardTemporalCipher();
+            
+            // Set the stored card if available
+            if (storedCard) {
+                window.temporalEncryption.creditCardNumber = storedCard;
+            }
+        }
+        
+        // Step 3: Initialize transaction interface with a retry mechanism
+        function initTransactionInterface() {
+            if (typeof TransactionInterface !== 'undefined') {
+                if (!window.transactionInterface) {
+                    console.log('Creating transaction interface instance');
+                    window.transactionInterface = new TransactionInterface();
+                }
+                
+                // Make sure it loads the latest card
+                if (window.transactionInterface && storedCard) {
+                    window.transactionInterface.saveCreditCardNumber(storedCard);
+                }
+            } else {
+                console.log('TransactionInterface not available yet, retrying...');
+                setTimeout(initTransactionInterface, 500);
+            }
+        }
+        
+        // Start the transaction interface initialization
+        initTransactionInterface();
+        
+        // Step 4: Update all card displays with stored card if available
+        if (storedCard) {
+            console.log('Updating displays with stored card:', storedCard.substr(0, 4) + '...' + storedCard.substr(-4));
+            const maskedCard = storedCard.substr(0, 4) + ' **** **** ' + storedCard.substr(-4);
+            
+            // Update all card number displays
+            document.querySelectorAll('.card-number-display').forEach(element => {
+                element.textContent = maskedCard;
+            });
+            
+            // Update form inputs that need the card number
+            document.querySelectorAll('.card-number-input').forEach(element => {
+                element.value = storedCard;
+            });
+        }
+        
+        // Step 5: Add listener for credit card generation
+        document.getElementById('generate-credit-card')?.addEventListener('click', function() {
+            console.log('Credit card generation triggered');
+        });
+        
+        // Step 6: Add global listener for any system that generates a credit card
+        document.addEventListener('creditCardGenerated', function(event) {
+            console.log('Credit card generated event received');
+            const newCard = event.detail.creditCardNumber;
+            
+            // Update all systems with the new card
+            if (typeof window.updateAllCardDisplays === 'function') {
+                window.updateAllCardDisplays(newCard);
+            }
+        });
+    });
+})();
 // Credit Card Temporal Encryption Workflow
 class CreditCardTemporalCipher {
     constructor() {
         this.creditCardFile = null;
         this.creditCardNumber = null;
         this.pin = null;
-    }
-
+   
+        // Try to load existing credit card from localStorage
+        const storedCard = localStorage.getItem('creditCardNumber');
+        if (storedCard) {
+            console.log('Temporal Cipher loaded card from localStorage:', storedCard);
+            this.creditCardNumber = storedCard;
+        } 
+		window.temporalEncryption = this;
+		
+		}
     downloadCreditCardFile(filename, downloadToken) {
         const downloadLink = document.createElement('a');
         downloadLink.href = `?action=download-credit-card&token=${downloadToken}`;
@@ -3847,6 +4107,27 @@ generateCreditCardPackage(email, pin) {
         
         // Display success message and details
         this.displayCreditCardDetails(data);
+        
+        // Update all card displays
+        if (typeof window.updateAllCardDisplays === 'function') {
+          window.updateAllCardDisplays(data.credit_card_number);
+        } else {
+          // Fallback if the global function isn't available
+          // Update all card number displays
+          document.querySelectorAll('.card-number-display').forEach(element => {
+            const maskedCard = data.credit_card_number.substr(0, 4) + ' **** **** ' + data.credit_card_number.substr(-4);
+            element.textContent = maskedCard;
+          });
+          
+          // Save to localStorage
+          localStorage.setItem('creditCardNumber', data.credit_card_number);
+        }
+        
+        // Dispatch an event that other components can listen for
+        const event = new CustomEvent('creditCardGenerated', {
+          detail: { creditCardNumber: data.credit_card_number }
+        });
+        document.dispatchEvent(event);
         
         resolve(data);
       } else {
@@ -3948,23 +4229,49 @@ encryptMessage(message, filename, pin) {
         });
     }
 
-    displayCreditCardDetails(data) {
-        const resultArea = document.getElementById('credit-card-result');
-        resultArea.innerHTML = `
-            <div class="alert alert-success">
-                <h4>Credit Card Generated Successfully</h4>
-                <p><strong>Card Number:</strong> ${data.credit_card_number}</p>
-                <p><strong>Verification File:</strong> ${data.filename}</p>
-                <p><strong>Download Link:</strong> 
-                    <a href="?action=download-credit-card&token=${data.download_token}" download>
-                        Download Verification File
-                    </a>
-                </p>
-                <p><strong>Temporal Unlock Time:</strong> ${new Date(data.obscured_timestamp * 1000).toLocaleString()}</p>
-                <small class="text-muted">Note: Download link is valid for 1 hour</small>
-            </div>
-        `;
+   displayCreditCardDetails(data) {
+    const resultArea = document.getElementById('credit-card-result');
+    resultArea.innerHTML = `
+        <div class="alert alert-success">
+            <h4>Credit Card Generated Successfully</h4>
+            <p><strong>Card Number:</strong> ${data.credit_card_number}</p>
+            <p><strong>Verification File:</strong> ${data.filename}</p>
+            <p><strong>Download Link:</strong> 
+                <a href="?action=download-credit-card&token=${data.download_token}" download>
+                    Download Verification File
+                </a>
+            </p>
+            <p><strong>Temporal Unlock Time:</strong> ${new Date(data.obscured_timestamp * 1000).toLocaleString()}</p>
+            <small class="text-muted">Note: Download link is valid for 1 hour</small>
+        </div>
+    `;
+    
+    // Store the credit card number for future use
+    this.creditCardNumber = data.credit_card_number;
+    
+    // Save to localStorage for persistence
+    localStorage.setItem('creditCardNumber', data.credit_card_number);
+    
+    // Update the card display in the transaction interface
+    if (window.transactionInterface) {
+        // Update transaction interface
+        window.transactionInterface.saveCreditCardNumber(data.credit_card_number);
+        window.transactionInterface.loadTransactionHistory();
+        window.transactionInterface.loadPendingRequests();
     }
+    
+    // Update blockchain interface if available
+    if (window.blockchainInterface) {
+        window.blockchainInterface.creditCardNumber = data.credit_card_number;
+        window.blockchainInterface.fetchCardBalance(data.credit_card_number);
+    }
+    
+    // Dispatch a global event that other components can listen for
+    const event = new CustomEvent('creditCardGenerated', { 
+        detail: { creditCardNumber: data.credit_card_number } 
+    });
+    document.dispatchEvent(event);
+}
 
     displayEncryptionResult(encryptedPackage) {
         const resultArea = document.getElementById('encryption-result');
@@ -4011,58 +4318,59 @@ encryptMessage(message, filename, pin) {
     }
 }
 
-// Event Listeners for Workflow
+// Credit Card Temporal Encryption Workflow
 document.addEventListener('DOMContentLoaded', () => {
-    const temporalEncryption = new CreditCardTemporalCipher();
-
-// Credit Card Generation
-document.getElementById('generate-credit-card')?.addEventListener('click', () => {
-    const email = document.getElementById('credit-card-email').value;
-    const pin = document.getElementById('credit-card-pin').value;
+    // Create global instances of our systems
+    window.temporalEncryption = new CreditCardTemporalCipher();
     
-    if (!email || !pin) {
-        document.getElementById('credit-card-result').innerHTML = `
-            <div class="alert alert-danger">
-                Please fill in both email and PIN fields.
-            </div>
-        `;
-        return;
-    }
-    
-    temporalEncryption.generateCreditCardPackage(email, pin)
-        .catch(error => {
+    // Credit Card Generation
+    document.getElementById('generate-credit-card')?.addEventListener('click', () => {
+        const email = document.getElementById('credit-card-email').value;
+        const pin = document.getElementById('credit-card-pin').value;
+        
+        if (!email || !pin) {
             document.getElementById('credit-card-result').innerHTML = `
                 <div class="alert alert-danger">
-                    ${error.message}
+                    Please fill in both email and PIN fields.
                 </div>
             `;
-        });
-});
-
-// Fix for the encrypt message event listener
-document.getElementById('encrypt-message')?.addEventListener('click', () => {
-  const message = document.getElementById('encrypt-input').value;
-  const filename = document.getElementById('credit-card-filename').value;
-  const pin = document.getElementById('credit-card-pin').value;
-
-  if (!message || !filename || !pin) {
-    document.getElementById('encryption-result').innerHTML = `
-      <div class="alert alert-danger">
-        Please fill in all required fields (message, filename, and PIN).
-      </div>
-    `;
-    return;
-  }
-
-  temporalEncryption.encryptMessage(message, filename, pin)
-    .catch(error => {
-      document.getElementById('encryption-result').innerHTML = `
-        <div class="alert alert-danger">
-          ${error.message}
-        </div>
-      `;
+            return;
+        }
+        
+        window.temporalEncryption.generateCreditCardPackage(email, pin)
+            .catch(error => {
+                document.getElementById('credit-card-result').innerHTML = `
+                    <div class="alert alert-danger">
+                        ${error.message}
+                    </div>
+                `;
+            });
     });
-});
+
+    // Message Encryption
+    document.getElementById('encrypt-message')?.addEventListener('click', () => {
+        const message = document.getElementById('encrypt-input').value;
+        const filename = document.getElementById('credit-card-filename').value;
+        const pin = document.getElementById('credit-card-pin').value;
+
+        if (!message || !filename || !pin) {
+            document.getElementById('encryption-result').innerHTML = `
+                <div class="alert alert-danger">
+                    Please fill in all required fields (message, filename, and PIN).
+                </div>
+            `;
+            return;
+        }
+
+        window.temporalEncryption.encryptMessage(message, filename, pin)
+            .catch(error => {
+                document.getElementById('encryption-result').innerHTML = `
+                    <div class="alert alert-danger">
+                        ${error.message}
+                    </div>
+                `;
+            });
+    });
 
     // Message Decryption
     document.getElementById('decrypt-message')?.addEventListener('click', () => {
@@ -4070,7 +4378,7 @@ document.getElementById('encrypt-message')?.addEventListener('click', () => {
         const filename = document.getElementById('decrypt-credit-card-filename').value;
         const pin = document.getElementById('decrypt-credit-card-pin').value;
 
-        temporalEncryption.decryptMessage(encryptedPackage, filename, pin)
+        window.temporalEncryption.decryptMessage(encryptedPackage, filename, pin)
             .catch(error => {
                 document.getElementById('decryption-result').innerHTML = `
                     <div class="alert alert-danger">
@@ -4079,6 +4387,33 @@ document.getElementById('encrypt-message')?.addEventListener('click', () => {
                 `;
             });
     });
+    
+    // Initialize card display if we already have a card
+    const storedCard = localStorage.getItem('creditCardNumber');
+    if (storedCard && window.temporalEncryption) {
+        window.temporalEncryption.creditCardNumber = storedCard;
+    }
+    
+    // Wait for transaction interface to be loaded and initialize it
+    const initializeTransactionInterface = () => {
+        if (typeof TransactionInterface !== 'undefined') {
+            // If the transaction interface is not yet initialized, do it now
+            if (!window.transactionInterface) {
+                window.transactionInterface = new TransactionInterface();
+            }
+            
+            // Ensure it has the latest card number
+            if (window.transactionInterface) {
+                window.transactionInterface.loadCreditCardNumber();
+            }
+        } else {
+            // If the TransactionInterface class is not loaded yet, retry after a delay
+            setTimeout(initializeTransactionInterface, 500);
+        }
+    };
+    
+    // Start the initialization process
+    initializeTransactionInterface();
 });
         // Copy encrypted data to clipboard
         function copyToClipboard() {
